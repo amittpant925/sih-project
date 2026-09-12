@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export async function apiRequest(path, options = {}) {
   const token = window.localStorage.getItem('directfarm_token');
@@ -31,6 +31,7 @@ export const authApi = {
 
 export const productApi = {
   list: (params) => apiRequest(`/products?${new URLSearchParams(params)}`),
+  create: (body) => apiRequest('/products', { method: 'POST', body: JSON.stringify(body) }),
 };
 
 export const orderApi = {

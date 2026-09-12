@@ -5,6 +5,7 @@ import {
   Minus, Plus, Search, ShoppingBasket, Sparkles, Star, Truck, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { authApi, orderApi, productApi } from './api';
+import VoiceAssistedInput from './components/VoiceAssistedInput';
 
 const products = [
   { id: 1, name: 'Red tomatoes', farmer: 'Maya Organics', price: 34, unit: 'kg', distance: 2.4, stock: 120, harvest: 'Harvested today', rating: 4.9, quality: 'Premium', category: 'Vegetables', color: 'tomato', organic: true, image: 'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=700&q=80', farmerLocation: 'Rajpur Road, Dehradun' },
@@ -43,8 +44,10 @@ function App() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [locationCoords, setLocationCoords] = useState(null);
   const [language, setLanguage] = useState('English');
+  const [voiceLanguage, setVoiceLanguage] = useState('en-IN');
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [visibleCount, setVisibleCount] = useState(6);
+  const [listingBusy, setListingBusy] = useState(false);
 
   useEffect(() => {
     const qrAuthSession = new URLSearchParams(window.location.search).get('qrAuth');
@@ -73,6 +76,10 @@ function App() {
   useEffect(() => {
     setVisibleCount(6);
   }, [category, query, sort]);
+
+  useEffect(() => {
+    document.documentElement.lang = voiceLanguage.split('-')[0] || 'en';
+  }, [voiceLanguage]);
 
   const filteredProducts = useMemo(() => {
     const sourceProducts = apiProducts || products;
@@ -144,6 +151,36 @@ function App() {
     setShowPayment(true);
   };
 
+  const handleVoiceSearch = (nextQuery, nextCategory) => {
+    setQuery(nextQuery);
+    if (nextCategory) setCategory(nextCategory);
+    setToast(`Searching for ${nextQuery}`);
+    speak(`Searching for ${nextQuery}`);
+  };
+
+  const handleListHarvest = async (listing) => {
+    if (!user) {
+      setShowAuth(true);
+      setToast('Sign in as a farmer to list your harvest');
+      return;
+    }
+    if (user.role !== 'farmer') {
+      setToast('Switch to a farmer account to list harvest');
+      return;
+    }
+    setListingBusy(true);
+    try {
+      await productApi.create(listing);
+      setToast(`${listing.name} is now listed for nearby buyers`);
+      speak(`${listing.name} is now listed for nearby buyers`);
+      setQuery(listing.name);
+    } catch (error) {
+      setApiError(error.message);
+    } finally {
+      setListingBusy(false);
+    }
+  };
+
   const completePayment = async () => {
     setPlacingOrder(true);
     try {
@@ -174,7 +211,7 @@ function App() {
           <button className="location-button" onClick={() => setShowLocation(true)}><MapPin size={16} /><span>{location}</span><ChevronDown size={14} /></button>
           <button className="icon-button" aria-label="Notifications"><Bell size={19} /><i /></button>
           <button className="profile-button" onClick={() => user ? (window.localStorage.removeItem('directfarm_token'), setUser(null), setToast('Signed out')) : setShowAuth(true)}><CircleUserRound size={23} /><span>{user?.name || 'Sign in'}</span></button>
-          <label className="language-picker" title="Choose language"><span>भाषा</span><select value={language} onChange={(event) => { setLanguage(event.target.value); setToast(`Language changed to ${event.target.value}`); }} aria-label="Choose language">{indianLanguages.map(([label]) => <option key={label}>{label}</option>)}</select></label>
+          <label className="language-picker" title="Choose language"><span>भाषा</span><select value={language} onChange={(event) => { const nextLanguage = event.target.value; setLanguage(nextLanguage); const nextCode = indianLanguages.find(([label]) => label === nextLanguage)?.[1] || 'en-IN'; setVoiceLanguage(nextCode); setToast(`Language changed to ${nextLanguage}`); }} aria-label="Choose language">{indianLanguages.map(([label]) => <option key={label}>{label}</option>)}</select></label>
           <button className={`voice-button ${voiceEnabled ? 'active' : ''}`} onClick={() => { setVoiceEnabled((current) => !current); speak(voiceEnabled ? 'Voice assistance off' : 'Welcome to DirectFarm. Fresh food from nearby farmers.'); }} aria-label={voiceEnabled ? 'Turn voice assistance off' : 'Turn voice assistance on'}>{voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
           <button className="basket-button" onClick={() => setShowCart(true)} aria-label="Open basket"><ShoppingBasket size={19} /><b>{cartCount}</b></button>
         </div>
@@ -190,6 +227,23 @@ function App() {
             <div className="hero-meta"><span><MapPin size={15} /> Showing farms within 10 km</span><span className="meta-divider" /><span><Truck size={15} /> Free pickup available</span><button className="speak-copy" onClick={() => speak('Find fresh produce from farmers near you. Fair prices and free pickup are available.')}>{voiceEnabled ? <Volume2 size={14} /> : null} Listen</button></div>
           </div>
           <div className="hero-art" aria-label="Illustration of a farm basket"><div className="sun" /><div className="hill hill-back" /><div className="hill hill-front" /><div className="produce produce-one">✦</div><div className="produce produce-two">●</div><div className="produce produce-three">◆</div><div className="basket-art" /></div>
+        </section>
+
+        <section className="px-6 py-6 sm:px-[9vw]">
+          <VoiceAssistedInput
+            languageCode={voiceLanguage}
+            query={query}
+            listingBusy={listingBusy}
+            onLanguageChange={(code, label) => {
+              setVoiceLanguage(code);
+              const matched = indianLanguages.find(([, value]) => value === code)?.[0] || label;
+              setLanguage(matched);
+              setToast(`Language changed to ${matched}`);
+            }}
+            onQueryChange={setQuery}
+            onSearch={handleVoiceSearch}
+            onListHarvest={handleListHarvest}
+          />
         </section>
 
         <section className="insight-strip"><div className="insight-icon"><Sparkles size={18} /></div><p><strong>More harvest, less travel.</strong> Your nearby farms have saved an estimated 248 delivery kilometers this week.</p><button onClick={() => setToast('Impact details are coming soon')}>See our impact <ArrowRight size={15} /></button></section>
