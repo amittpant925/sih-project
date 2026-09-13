@@ -7,6 +7,8 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import marketplaceRouter from './routes/marketplace.js';
+import batchRouter from './routes/batch.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -215,6 +217,9 @@ app.get('/api/orders', requireAuth, asyncRoute(async (request, response) => {
   const filter = request.auth.role === 'farmer' ? { farmer: request.auth.sub } : { customer: request.auth.sub };
   response.json({ orders: await Order.find(filter).populate('farmer', 'name').populate('customer', 'name').sort({ createdAt: -1 }) });
 }));
+
+app.use('/api', marketplaceRouter({ requireAuth, requireRole, asyncRoute }));
+app.use('/api', batchRouter({ requireAuth, requireRole, asyncRoute }));
 
 app.use((_request, response) => response.status(404).json({ error: 'Route not found' }));
 app.use((error, _request, response, _next) => response.status(error.status || 500).json({ error: error.status ? error.message : 'Internal server error' }));

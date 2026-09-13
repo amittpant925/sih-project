@@ -4,7 +4,9 @@ import {
   ArrowRight, Bell, Building2, Check, ChevronDown, CircleUserRound, Leaf, MapPin, Menu, QrCode,
   Minus, Plus, Search, ShoppingBasket, Sparkles, Star, Truck, Volume2, VolumeX, X,
 } from 'lucide-react';
-import { authApi, orderApi, productApi } from './api';
+import { authApi, batchApi, listingApi, orderApi, productApi } from './api';
+import AuctionBoard from './components/AuctionBoard';
+import BatchTrace from './components/BatchTrace';
 import VoiceAssistedInput from './components/VoiceAssistedInput';
 
 const products = [
@@ -48,12 +50,20 @@ function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [visibleCount, setVisibleCount] = useState(6);
   const [listingBusy, setListingBusy] = useState(false);
+  const [verifyBatchId, setVerifyBatchId] = useState('');
 
   useEffect(() => {
-    const qrAuthSession = new URLSearchParams(window.location.search).get('qrAuth');
+    const params = new URLSearchParams(window.location.search);
+    const qrAuthSession = params.get('qrAuth');
     if (qrAuthSession) {
       setShowAuth(true);
       setAuthMode('qr-approve');
+    }
+    const pathMatch = window.location.pathname.match(/\/verify-batch\/([^/]+)/);
+    const batchFromQuery = params.get('batch');
+    if (pathMatch?.[1] || batchFromQuery) {
+      setVerifyBatchId(decodeURIComponent(pathMatch?.[1] || batchFromQuery));
+      setView('trace');
     }
   }, []);
 
@@ -171,7 +181,29 @@ function App() {
     setListingBusy(true);
     try {
       await productApi.create(listing);
-      setToast(`${listing.name} is now listed for nearby buyers`);
+      await listingApi.create({
+        transactionModel: 'fixed-price',
+        title: listing.name,
+        produce: listing.name,
+        category: listing.category || 'Vegetables',
+        description: listing.description || listing.name,
+        totalQuantityKg: Number(listing.availableQuantity) || 1,
+        pricePerKg: Number(listing.price),
+        organic: Boolean(listing.organic),
+      });
+      if (locationCoords) {
+        await batchApi.create({
+          produce: listing.name,
+          category: listing.category,
+          qualityGrade: 'A',
+          quantityKg: listing.availableQuantity,
+          harvestDate: new Date().toISOString(),
+          latitude: locationCoords.latitude,
+          longitude: locationCoords.longitude,
+          farmAddress: location,
+        });
+      }
+      setToast(`${listing.name} is listed at ₹${listing.price}/kg with a traceable batch`);
       speak(`${listing.name} is now listed for nearby buyers`);
       setQuery(listing.name);
     } catch (error) {
@@ -206,6 +238,7 @@ function App() {
           <button className={view === 'marketplace' ? 'active' : ''} onClick={() => setView('marketplace')}>Marketplace</button>
           <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>My orders</button>
           <button className={view === 'bulk' ? 'active' : ''} onClick={() => setView('bulk')}>Bulk buying <span className="new-pill">New</span></button>
+          <button className={view === 'trace' ? 'active' : ''} onClick={() => setView('trace')}>Trace harvest</button>
         </nav>
         <div className="top-actions">
           <button className="location-button" onClick={() => setShowLocation(true)}><MapPin size={16} /><span>{location}</span><ChevronDown size={14} /></button>
@@ -217,7 +250,7 @@ function App() {
         </div>
       </header>
 
-      {view === 'marketplace' ? <main>
+      {view === 'trace' ? <BatchTrace initialBatchId={verifyBatchId} user={user} onNeedAuth={() => setShowAuth(true)} onToast={setToast} onError={setApiError} /> : view === 'marketplace' ? <main>
         <section className="hero-section">
           <div className="hero-copy">
             <p className="eyebrow"><span className="eyebrow-dot" /> Your neighborhood, freshly harvested</p>
@@ -253,7 +286,7 @@ function App() {
           <div className="category-row">{categories.map((item) => <button key={item} className={category === item ? 'category active' : 'category'} onClick={() => setCategory(item)}>{item}</button>)}<span className="category-spacer" /><label className="sort-select">Sort by <select value={sort} onChange={(event) => setSort(event.target.value)}><option>Recommended</option><option>Best quality</option><option>Nearest first</option><option>Price: low to high</option><option>Price: high to low</option><option>Highest rated</option></select><ChevronDown size={14} /></label></div>
           {loadingProducts ? <div className="empty-state"><Leaf size={24} /><h3>Finding nearby harvests...</h3><p>Checking fresh inventory from local farms.</p></div> : filteredProducts.length ? <><div className="recommendation-strip"><Sparkles size={16} /><span><strong>Good with your basket:</strong> Explore a different price point or quality grade from nearby farmers.</span></div><div className="product-grid">{filteredProducts.slice(0, visibleCount).map((product, index) => <ProductCard key={product.id} product={product} onAdd={(item) => { addToCart(item); speak(`${item.name} from ${item.farmer} added to your basket.`); }} featured={index === 0 && !query && category === 'All produce'} />)}</div>{visibleCount < filteredProducts.length && <div className="load-more"><Leaf size={17} /><span>Loading more nearby harvests...</span></div>}</> : <div className="empty-state"><Leaf size={24} /><h3>No produce found</h3><p>Try a different search or category.</p></div>}
         </section>
-      </main> : view === 'orders' ? <OrdersView onShop={() => setView('marketplace')} /> : <BulkBuyingView onBack={() => setView('marketplace')} onToast={setToast} />}
+      </main> : view === 'orders' ? <OrdersView onShop={() => setView('marketplace')} /> : <BulkBuyingView onBack={() => setView('marketplace')} onToast={setToast} user={user} onNeedAuth={() => setShowAuth(true)} onError={setApiError} />}
 
       {showCart && <CartDrawer cart={cart} total={cartTotal} deliveryMethod={deliveryMethod} onDeliveryMethod={setDeliveryMethod} onCheckout={handleCheckout} placingOrder={placingOrder} onClose={() => setShowCart(false)} onShop={() => { setShowCart(false); setView('marketplace'); }} onUpdateQuantity={updateCartQuantity} />}
       {showPayment && <PaymentDialog total={cartTotal} placingOrder={placingOrder} onClose={() => setShowPayment(false)} onPaid={completePayment} />}
@@ -347,8 +380,8 @@ function LocationDialog({ current, onClose, onLocation, onSave }) {
   return <div className="modal-backdrop" onClick={onClose}><div className="location-dialog" onClick={(event) => event.stopPropagation()}><div className="drawer-head"><div><p className="section-kicker">Your location</p><h2>Find farms closer to you</h2></div><button className="close-button" onClick={onClose}><X size={20} /></button></div><p className="dialog-copy">Allow location access to rank farmers by distance. Your location is only used to calculate nearby matches and delivery options.</p><button className="location-permission" onClick={requestDeviceLocation}><MapPin size={16} /> Use my current location</button><label className="location-input"><MapPin size={17} /><input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Search city or locality" autoFocus /></label><button className="checkout-button" onClick={() => onSave(value.trim() || current)}>Save location <ArrowRight size={17} /></button></div></div>;
 }
 
-function BulkBuyingView({ onBack, onToast }) {
-  return <main className="bulk-view"><div className="bulk-hero"><div><p className="section-kicker">For restaurants, retailers & institutions</p><h1>Buy direct.<br /><em>Plan with confidence.</em></h1><p>Post what you need and receive offers from verified farms nearby. Combine multiple farmers when one harvest is not enough.</p><button className="primary-button" onClick={() => onToast('Requirement form is ready for the next release')}>Post a requirement <ArrowRight size={16} /></button></div><div className="bulk-art"><Building2 size={54} /><span>500 kg</span><small>potatoes needed</small></div></div><div className="bulk-grid"><section className="bulk-panel"><p className="section-kicker">How it works</p><div className="bulk-step"><b>01</b><span><strong>Share your requirement</strong><small>Product, quantity, budget and required date.</small></span></div><div className="bulk-step"><b>02</b><span><strong>Compare local offers</strong><small>See price, distance and fulfillment details.</small></span></div><div className="bulk-step"><b>03</b><span><strong>Accept the best fit</strong><small>One farmer or a coordinated group of farmers.</small></span></div></section><section className="bulk-panel opportunity-panel"><p className="section-kicker">Open opportunities near Dehradun</p><div className="opportunity"><span className="opportunity-icon">P</span><div><strong>Potatoes for a hostel</strong><small>500 kg · ₹20–25/kg · required in 6 days</small></div><span className="distance">4.8 km</span></div><div className="opportunity"><span className="opportunity-icon">R</span><div><strong>Fresh rice for a retailer</strong><small>300 kg · max ₹92/kg · required in 12 days</small></div><span className="distance">7.2 km</span></div><button className="text-button" onClick={onBack}>Browse household produce <ArrowRight size={16} /></button></section></div></main>;
+function BulkBuyingView({ onBack, onToast, user, onNeedAuth, onError }) {
+  return <main className="bulk-view"><div className="bulk-hero"><div><p className="section-kicker">For restaurants, retailers & institutions</p><h1>Buy direct.<br /><em>Plan with confidence.</em></h1><p>Post what you need and receive offers from verified farms nearby. Combine multiple farmers when one harvest is not enough.</p><button className="primary-button" onClick={() => onToast('Requirement form is ready for the next release')}>Post a requirement <ArrowRight size={16} /></button></div><div className="bulk-art"><Building2 size={54} /><span>500 kg</span><small>potatoes needed</small></div></div><div className="bulk-grid"><section className="bulk-panel"><p className="section-kicker">How it works</p><div className="bulk-step"><b>01</b><span><strong>Share your requirement</strong><small>Product, quantity, budget and required date.</small></span></div><div className="bulk-step"><b>02</b><span><strong>Compare local offers</strong><small>See price, distance and fulfillment details.</small></span></div><div className="bulk-step"><b>03</b><span><strong>Accept the best fit</strong><small>One farmer or a coordinated group of farmers.</small></span></div></section><section className="bulk-panel opportunity-panel"><p className="section-kicker">Open opportunities near Dehradun</p><div className="opportunity"><span className="opportunity-icon">P</span><div><strong>Potatoes for a hostel</strong><small>500 kg · ₹20–25/kg · required in 6 days</small></div><span className="distance">4.8 km</span></div><div className="opportunity"><span className="opportunity-icon">R</span><div><strong>Fresh rice for a retailer</strong><small>300 kg · max ₹92/kg · required in 12 days</small></div><span className="distance">7.2 km</span></div><button className="text-button" onClick={onBack}>Browse household produce <ArrowRight size={16} /></button></section></div><AuctionBoard user={user} onNeedAuth={onNeedAuth} onToast={onToast} onError={onError} /></main>;
 }
 
 function OrdersView({ onShop }) {

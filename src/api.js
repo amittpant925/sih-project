@@ -37,3 +37,17 @@ export const productApi = {
 export const orderApi = {
   create: (body) => apiRequest('/orders', { method: 'POST', body: JSON.stringify(body) }),
 };
+
+export const listingApi = {
+  create: (body) => apiRequest('/listings', { method: 'POST', body: JSON.stringify(body) }),
+  activeAuctions: () => apiRequest('/listings/active-auctions'),
+  get: (id) => apiRequest(`/listings/${id}`),
+  bid: (body) => apiRequest('/bids', { method: 'POST', body: JSON.stringify(body) }),
+  reserve: (body) => apiRequest('/reservations', { method: 'POST', body: JSON.stringify(body) }),
+  purchase: (listingId, body) => apiRequest(`/listings/${listingId}/purchase`, { method: 'POST', body: JSON.stringify(body) }),
+};
+
+export const batchApi = {
+  create: (body) => apiRequest('/batches', { method: 'POST', body: JSON.stringify(body) }),
+  verify: (batchId) => apiRequest(`/verify-batch/${encodeURIComponent(batchId)}`),
+};
