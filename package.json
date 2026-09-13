@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/vite": "latest",
     "@vitejs/plugin-react": "latest",
     "bcryptjs": "latest",
     "cors": "latest",
@@ -19,13 +20,13 @@
     "express-rate-limit": "latest",
     "helmet": "latest",
     "jsonwebtoken": "latest",
-    "@tailwindcss/vite": "latest",
     "lucide-react": "latest",
-    "tailwindcss": "latest",
+    "mongodb": "^7.6.0",
     "mongoose": "latest",
     "qrcode": "^1.5.4",
     "react": "latest",
     "react-dom": "latest",
+    "tailwindcss": "latest",
     "vite": "latest"
   }
 }

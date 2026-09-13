@@ -51,6 +51,18 @@ function App() {
   const [visibleCount, setVisibleCount] = useState(6);
   const [listingBusy, setListingBusy] = useState(false);
   const [verifyBatchId, setVerifyBatchId] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem('directfarm_notifications') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem('directfarm_notifications', JSON.stringify(notifications.slice(0, 20)));
+  }, [notifications]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -125,6 +137,17 @@ function App() {
     setToast(`${product.name} added to your basket`);
     window.setTimeout(() => setToast(''), 2200);
   };
+
+  const addNotification = (title, message) => {
+    const id = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    setNotifications((current) => [{ id, title, message, createdAt: new Date().toISOString(), read: false }, ...current].slice(0, 20));
+  };
+
+  const markNotificationRead = (id) => {
+    setNotifications((current) => current.map((notification) => notification.id === id ? { ...notification, read: true } : notification));
+  };
+
+  const unreadNotifications = notifications.filter((notification) => !notification.read).length;
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -204,6 +227,7 @@ function App() {
         });
       }
       setToast(`${listing.name} is listed at ₹${listing.price}/kg with a traceable batch`);
+      addNotification('Harvest listed', `${listing.name} is now available to nearby buyers.`);
       speak(`${listing.name} is now listed for nearby buyers`);
       setQuery(listing.name);
     } catch (error) {
@@ -222,6 +246,7 @@ function App() {
       setShowCart(false);
       setView('orders');
       setToast('Payment noted and order placed');
+      addNotification('Order placed', 'Your payment was recorded and the farmer will prepare your order.');
     } catch (error) {
       setApiError(error.message);
     } finally {
@@ -242,7 +267,10 @@ function App() {
         </nav>
         <div className="top-actions">
           <button className="location-button" onClick={() => setShowLocation(true)}><MapPin size={16} /><span>{location}</span><ChevronDown size={14} /></button>
-          <button className="icon-button" aria-label="Notifications"><Bell size={19} /><i /></button>
+          <div className="notification-wrap">
+            <button className="icon-button" aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`} aria-expanded={showNotifications} onClick={() => setShowNotifications((current) => !current)}><Bell size={19} />{unreadNotifications > 0 && <i />}</button>
+            {showNotifications && <div className="notification-panel" role="dialog" aria-label="Notifications"><div className="notification-head"><div><strong>Notifications</strong><span>{unreadNotifications ? `${unreadNotifications} unread` : 'All caught up'}</span></div>{unreadNotifications > 0 && <button onClick={() => setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))}>Mark all read</button>}</div>{notifications.length ? <div className="notification-list">{notifications.map((notification) => <button className={`notification-item ${notification.read ? '' : 'unread'}`} key={notification.id} onClick={() => markNotificationRead(notification.id)}><span className="notification-dot" /><span><strong>{notification.title}</strong><small>{notification.message}</small><time>{new Date(notification.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time></span></button>)}</div> : <div className="notification-empty"><Bell size={22} /><p>No notifications yet</p><small>Order and harvest updates will appear here.</small></div>}</div>}
+          </div>
           <button className="profile-button" onClick={() => user ? (window.localStorage.removeItem('directfarm_token'), setUser(null), setToast('Signed out')) : setShowAuth(true)}><CircleUserRound size={23} /><span>{user?.name || 'Sign in'}</span></button>
           <label className="language-picker" title="Choose language"><span>भाषा</span><select value={language} onChange={(event) => { const nextLanguage = event.target.value; setLanguage(nextLanguage); const nextCode = indianLanguages.find(([label]) => label === nextLanguage)?.[1] || 'en-IN'; setVoiceLanguage(nextCode); setToast(`Language changed to ${nextLanguage}`); }} aria-label="Choose language">{indianLanguages.map(([label]) => <option key={label}>{label}</option>)}</select></label>
           <button className={`voice-button ${voiceEnabled ? 'active' : ''}`} onClick={() => { setVoiceEnabled((current) => !current); speak(voiceEnabled ? 'Voice assistance off' : 'Welcome to DirectFarm. Fresh food from nearby farmers.'); }} aria-label={voiceEnabled ? 'Turn voice assistance off' : 'Turn voice assistance on'}>{voiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
@@ -291,7 +319,7 @@ function App() {
       {showCart && <CartDrawer cart={cart} total={cartTotal} deliveryMethod={deliveryMethod} onDeliveryMethod={setDeliveryMethod} onCheckout={handleCheckout} placingOrder={placingOrder} onClose={() => setShowCart(false)} onShop={() => { setShowCart(false); setView('marketplace'); }} onUpdateQuantity={updateCartQuantity} />}
       {showPayment && <PaymentDialog total={cartTotal} placingOrder={placingOrder} onClose={() => setShowPayment(false)} onPaid={completePayment} />}
       {showLocation && <LocationDialog current={location} onClose={() => setShowLocation(false)} onLocation={(coords) => { setLocationCoords(coords); setToast('Location permission granted. Nearest farms are prioritized.'); }} onSave={(nextLocation) => { setLocation(nextLocation); setShowLocation(false); setToast(`Showing farms near ${nextLocation}`); }} />}
-      {showAuth && <AuthDialog mode={authMode} onModeChange={setAuthMode} onClose={() => setShowAuth(false)} onSuccess={(currentUser, token) => { window.localStorage.setItem('directfarm_token', token); setUser(currentUser); setShowAuth(false); setToast(`Welcome, ${currentUser.name}`); }} />}
+      {showAuth && <AuthDialog mode={authMode} onModeChange={setAuthMode} onClose={() => setShowAuth(false)} onSuccess={(currentUser, token) => { window.localStorage.setItem('directfarm_token', token); setUser(currentUser); setShowAuth(false); setToast(`Welcome, ${currentUser.name}`); addNotification('Signed in', `Welcome back, ${currentUser.name}.`); }} />}
       {apiError && <div className="error-banner" role="alert">{apiError}<button onClick={() => setApiError('')}><X size={15} /></button></div>}
       {toast && <div className="toast"><span>✓</span>{toast}</div>}
       <footer><span>© 2026 directfarm</span><span>Fair food, closer to home.</span><span>Built for farmers and their communities.</span></footer>

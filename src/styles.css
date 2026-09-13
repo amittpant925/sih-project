@@ -23,7 +23,12 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 .location-button { padding: 9px 12px; border: 1px solid var(--line); border-radius: 4px; }
 .location-button svg { color: #7d9e48; }
 .icon-button, .basket-button { position: relative; display: grid; place-items: center; }
+.notification-wrap { position: relative; }
 .icon-button i { position: absolute; width: 5px; height: 5px; background: #ed806c; border-radius: 50%; top: 0; right: -1px; }
+.notification-panel { position: absolute; z-index: 12; top: 35px; right: -12px; width: min(360px, calc(100vw - 32px)); background: #fbfbf8; border: 1px solid var(--line); box-shadow: 0 18px 45px #20352c26; }
+.notification-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; padding: 17px; border-bottom: 1px solid var(--line); }
+.notification-head strong, .notification-head span { display: block; }.notification-head strong { font-size: 13px; }.notification-head span { color: var(--muted); font-size: 9px; margin-top: 4px; }.notification-head button { color: #5d8040; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.notification-list { max-height: 350px; overflow-y: auto; }.notification-item { width: 100%; display: flex; gap: 10px; padding: 14px 17px; text-align: left; border-bottom: 1px solid #edf0eb; }.notification-item:hover, .notification-item.unread { background: #f1f6e8; }.notification-dot { width: 6px; height: 6px; flex: none; margin-top: 5px; border-radius: 50%; background: transparent; }.notification-item.unread .notification-dot { background: #ed806c; }.notification-item strong, .notification-item small, .notification-item time { display: block; }.notification-item strong { font-size: 11px; }.notification-item small { color: var(--muted); font-size: 10px; line-height: 1.45; margin-top: 4px; }.notification-item time { color: #9aa49d; font-size: 8px; margin-top: 6px; }.notification-empty { padding: 32px 20px; text-align: center; color: var(--muted); }.notification-empty svg { color: #9bb56c; }.notification-empty p { color: var(--ink); font-size: 11px; margin: 10px 0 5px; }.notification-empty small { font-size: 9px; }
 .basket-button b { position: absolute; font-size: 9px; color: white; background: var(--green); width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; top: -9px; right: -9px; }
 .mobile-menu { display: none; }
 .hero-section { min-height: 438px; display: flex; padding: 72px 9vw 65px; position: relative; border-bottom: 1px solid var(--line); background: #ecefe5; }
